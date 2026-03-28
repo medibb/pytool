@@ -1,6 +1,7 @@
 # pytool — 부산대병원 재활의학과 연구 자동화 도구
 
-임상연구 문서 생성 및 편집 자동화를 위한 Python 스크립트 모음.
+임상연구의 설계 → 문서 생성 → 문헌검토 → IRB 제출 → 데이터 분석 → 논문 작성까지
+전 과정을 자동화하는 Python 스크립트 모음.
 
 ## 도구 목록
 
@@ -11,6 +12,10 @@
 | `clinical_research_scaffold.py` | 임상연구 문서 3종 자동 생성 (예진지+Quick Sheet+CRF) | python-docx, lxml |
 | `sap_generator.py` | 통계분석계획서(SAP) docx 자동 생성 — sample size 계산 + power curve + TransCelerate 구조 | python-docx, statsmodels, matplotlib, numpy, scipy |
 | `protocol_crf_mapper.py` | Protocol ↔ CRF 일관성 검증 + SPIRIT 2025 체크리스트 (50항목) 자동 검증 | python-docx |
+| `lit_review_pipeline.py` | 체계적 문헌검토 파이프라인 — PICO→PubMed 검색 + PRISMA flow + 추출표 | biopython, python-docx, matplotlib |
+| `irb_document_suite.py` | IRB 서류 일괄 생성 — 연구요약서 + 동의서 + 제출 체크리스트 | python-docx |
+| `table1_generator.py` | Table 1 (baseline characteristics) 자동 생성 + 분석 스크립트 skeleton | pandas, scipy, python-docx |
+| `reporting_checklist.py` | CONSORT/STROBE 체크리스트 검증 + 임상시험 등록 초안 | python-docx |
 
 ## 사용법
 
@@ -253,12 +258,74 @@ python3 protocol_crf_mapper.py --example --run --summary
 
 **변수 매칭 엔진:** 의학 용어 synonym dictionary + token overlap + substring matching
 
+### 6. lit_review_pipeline.py
+
+PICO 구조에서 PubMed 검색쿼리를 자동 생성하고, 논문을 검색/다운로드하여 체계적 문헌검토를 지원합니다.
+
+```bash
+# PICO config로 PubMed 검색 + PRISMA + 추출표 일괄 생성
+python3 lit_review_pipeline.py --example --run --email your@email.com -o ./review
+
+# 검색 쿼리만 확인
+python3 lit_review_pipeline.py pico.json --query-only
+```
+
+**출력물:** search_results.csv, search_results.md, extraction_template.docx, prisma_flow.png
+
+### 7. irb_document_suite.py
+
+Config → IRB 제출 서류 3종 일괄 생성. 기존 scaffold + SAP와 합쳐서 Full IRB Suite 완성.
+
+```bash
+python3 irb_document_suite.py --example --run -o ./irb_docs
+# → study_summary.docx, informed_consent.docx, irb_checklist.docx
+```
+
+**전체 IRB Suite (pytool 연동):**
+| 서류 | 생성 도구 |
+|------|---------|
+| CRF / 예진지 / Quick Sheet | `clinical_research_scaffold.py` |
+| SAP | `sap_generator.py` |
+| 연구요약서 / 동의서 / 체크리스트 | `irb_document_suite.py` |
+| Protocol 일관성 보고서 | `protocol_crf_mapper.py` |
+
+### 8. table1_generator.py
+
+CSV/Excel 데이터 → Table 1 (Baseline Characteristics) 자동 생성. SAP config → 분석 스크립트 skeleton도 생성.
+
+```bash
+# Table 1 생성 (실제 데이터 필요)
+python3 table1_generator.py table1 data.csv -o table1.docx
+
+# SAP config에서 분석 스크립트 skeleton 생성
+python3 table1_generator.py skeleton -o ./analysis
+# → 01_data_import.py ~ 08_export_results.py
+```
+
+**Table 1 지원:** continuous (mean±SD), skewed (median[IQR]), categorical (n(%)), binary — t-test / Mann-Whitney / Chi-square / Fisher 자동 선택
+
+### 9. reporting_checklist.py
+
+논문 원고의 CONSORT 2010 (RCT) / STROBE (관찰연구) 체크리스트 충족 여부 자동 검증 + 임상시험 등록 초안.
+
+```bash
+python3 reporting_checklist.py --example --run
+# → CONSORT validation + trial_registration_draft.docx
+
+python3 reporting_checklist.py consort --config manuscript.json -o report.docx
+python3 reporting_checklist.py register --config study.json -o draft.docx
+```
+
+**Registration draft:** ClinicalTrials.gov / CRIS 필드 자동 채움 (sample size 자동 계산 포함)
+
 ## 의존성 설치
 
 ```bash
-pip install python-docx lxml pyyaml statsmodels matplotlib numpy scipy
+pip install python-docx lxml pyyaml statsmodels matplotlib numpy scipy biopython pandas
 # pyyaml: YAML config 사용 시만 필요
-# statsmodels, matplotlib, numpy, scipy: sap_generator.py용
+# statsmodels, matplotlib, numpy, scipy: sap_generator.py
+# biopython: lit_review_pipeline.py (PubMed E-utilities)
+# pandas: table1_generator.py
 ```
 
 ## 원본 스크립트
@@ -272,3 +339,7 @@ pip install python-docx lxml pyyaml statsmodels matplotlib numpy scipy
 - `FSHD/{FSHD_CRF, 통증예진_어깨, Ultrasound Quick Sheet}.docx` → `clinical_research_scaffold.py`
 - TransCelerate Common SAP Template + statsmodels power analysis → `sap_generator.py`
 - SPIRIT 2025 checklist (BMJ/JAMA/Lancet) + scaffold/SAP config 구조 → `protocol_crf_mapper.py`
+- PubMed E-utilities + PRISMA 2020 flow diagram → `lit_review_pipeline.py`
+- 부산대학교병원 IRB 동의서 양식 + 연구요약서 + 제출 체크리스트 → `irb_document_suite.py`
+- tableone (R) 패턴 + pandas/scipy → `table1_generator.py`
+- CONSORT 2010 / STROBE checklist + ClinicalTrials.gov 등록 양식 → `reporting_checklist.py`
