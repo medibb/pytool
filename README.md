@@ -10,6 +10,7 @@
 | `docx_comment_injector.py` | 기존 docx에 Word 주석(Comment) 삽입 | lxml |
 | `clinical_research_scaffold.py` | 임상연구 문서 3종 자동 생성 (예진지+Quick Sheet+CRF) | python-docx, lxml |
 | `sap_generator.py` | 통계분석계획서(SAP) docx 자동 생성 — sample size 계산 + power curve + TransCelerate 구조 | python-docx, statsmodels, matplotlib, numpy, scipy |
+| `protocol_crf_mapper.py` | Protocol ↔ CRF 일관성 검증 + SPIRIT 2025 체크리스트 (50항목) 자동 검증 | python-docx |
 
 ## 사용법
 
@@ -202,6 +203,56 @@ python3 sap_generator.py my_study_config.json --output My_SAP.docx
 8. Tables & Figures Shells
 9. SAP Amendment Log
 
+### 5. protocol_crf_mapper.py
+
+Protocol ↔ CRF 일관성 검증 + SPIRIT 2025 체크리스트 자동 검증 도구. scaffold config (CRF/예진지/Quick Sheet)와 SAP config를 cross-reference하여 변수 매핑 행렬과 gap report를 생성합니다.
+
+**기능 2가지:**
+1. **Mapping Matrix**: SAP에 정의된 모든 outcome 변수가 CRF에 수집되는지 확인
+2. **SPIRIT 2025 Validator**: 프로토콜이 SPIRIT 2025 50개 항목을 충족하는지 자동 검증
+
+**Python에서 사용:**
+
+```python
+from protocol_crf_mapper import (
+    generate_mapping_matrix, validate_spirit_2025,
+    generate_full_report, EXAMPLE_SCAFFOLD_CONFIG, EXAMPLE_SAP_CONFIG
+)
+
+# 1. Mapping matrix만 확인
+matrix = generate_mapping_matrix(EXAMPLE_SCAFFOLD_CONFIG, EXAMPLE_SAP_CONFIG)
+print(f"Coverage: {matrix['summary']['coverage_pct']}%")
+print(f"Gaps: {len(matrix['gaps'])}")
+
+# 2. SPIRIT 2025 validation
+result = validate_spirit_2025(EXAMPLE_SCAFFOLD_CONFIG, EXAMPLE_SAP_CONFIG)
+print(f"Score: {result['score']['addressed']}/{result['score']['auto_checkable']}")
+
+# 3. Full docx report (mapping + SPIRIT + recommendations)
+generate_full_report(EXAMPLE_SCAFFOLD_CONFIG, EXAMPLE_SAP_CONFIG, "report.docx")
+```
+
+**CLI에서 사용:**
+
+```bash
+# 예시 config로 즉시 실행
+python3 protocol_crf_mapper.py --example --run
+
+# JSON config 파일로 실행
+python3 protocol_crf_mapper.py scaffold.json sap.json --output report.docx
+
+# 텍스트 요약만 (docx 미생성)
+python3 protocol_crf_mapper.py --example --run --summary
+```
+
+**Docx 보고서 구조:**
+1. Protocol ↔ CRF Mapping Matrix (SAP 변수 → CRF 매칭 테이블)
+2. Gap Analysis (CRF 누락 변수 목록)
+3. SPIRIT 2025 Checklist (50항목 충족 현황)
+4. Recommendations (자동 생성 개선 권고)
+
+**변수 매칭 엔진:** 의학 용어 synonym dictionary + token overlap + substring matching
+
 ## 의존성 설치
 
 ```bash
@@ -220,3 +271,4 @@ pip install python-docx lxml pyyaml statsmodels matplotlib numpy scipy
 - `FSHD/build_commented_docx.py` → `docx_comment_injector.py`
 - `FSHD/{FSHD_CRF, 통증예진_어깨, Ultrasound Quick Sheet}.docx` → `clinical_research_scaffold.py`
 - TransCelerate Common SAP Template + statsmodels power analysis → `sap_generator.py`
+- SPIRIT 2025 checklist (BMJ/JAMA/Lancet) + scaffold/SAP config 구조 → `protocol_crf_mapper.py`
