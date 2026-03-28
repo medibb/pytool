@@ -1,0 +1,168 @@
+# pytool — 부산대병원 재활의학과 연구 자동화 도구
+
+임상연구 문서 생성 및 편집 자동화를 위한 Python 스크립트 모음.
+
+## 도구 목록
+
+| 파일 | 기능 | 의존성 |
+|------|------|--------|
+| `pnuh_protocol_generator.py` | 프로토콜 제출서 docx 생성 (범용) | python-docx |
+| `docx_comment_injector.py` | 기존 docx에 Word 주석(Comment) 삽입 | lxml |
+| `clinical_research_scaffold.py` | 임상연구 문서 3종 자동 생성 (예진지+Quick Sheet+CRF) | python-docx, lxml |
+
+## 사용법
+
+### 1. pnuh_protocol_generator.py
+
+프로토콜 제출서를 config dict 기반으로 자동 생성합니다.
+
+```python
+from pnuh_protocol_generator import generate_protocol
+
+config = {
+    "title": "프로토콜 부제목",
+    "header_title": "헤더에 표시할 프로토콜명",
+    "department": "재활의학과",
+    "sections": [
+        {
+            "label": "섹션 라벨",
+            "rows": [
+                ("소항목명", "BG색상코드", ["내용1", "내용2", ("굵은내용", True)]),
+            ],
+        },
+    ],
+    "notes": [("비고 텍스트", False, False)],  # (text, bold, red)
+}
+
+generate_protocol(config, "output.docx")
+```
+
+기본 색상 코드: `HDR`(진한파랑), `SEC`(연파랑), `SUB`(연녹색), `WARN`(연노랑), `CRIT`(연빨강), `NOTE`(연회색)
+
+### 2. docx_comment_injector.py
+
+기존 Word 파일에 실제 Comment(주석)를 프로그래밍 방식으로 삽입합니다.
+
+**Python에서 사용:**
+
+```python
+from docx_comment_injector import inject_comments
+
+comments = [
+    {"id": 0, "anchor": "검색할 텍스트", "text": "주석 내용"},
+    {"id": 1, "anchor": "다른 텍스트", "text": "주석 내용2"},
+]
+
+inject_comments("input.docx", "output.docx", comments,
+                author="이재현 (PI)", date="2026-03-27T00:00:00Z")
+```
+
+**CLI에서 사용:**
+
+```bash
+python3 docx_comment_injector.py input.docx output.docx comments.json
+```
+
+comments.json 형식:
+```json
+{
+  "author": "이재현 (PI)",
+  "date": "2026-03-27T00:00:00Z",
+  "comments": [
+    {"id": 0, "anchor": "검색할 텍스트", "text": "주석 내용"},
+    {"id": 1, "anchor": "다른 텍스트", "text": "주석 내용2"}
+  ]
+}
+```
+
+### 3. clinical_research_scaffold.py
+
+"Practice-first, Research-seamless" 프레임워크 — config dict 하나로 연구별 맞춤 문서 3종을 생성합니다.
+
+| 문서 | 역할 | 사용 장소 |
+|------|------|----------|
+| 예진지 | 환자 문진 + 검사자 측정 (baseline) | 외래 예진실 |
+| Quick Sheet | 시술/검사실 전용 데이터만 | 시술실/검사실 |
+| CRF | 마스터 문서 — 전체 통합 | 사후 정리용 |
+
+**Python에서 사용:**
+
+```python
+from clinical_research_scaffold import generate_research_docs, EXAMPLE_CONFIG
+
+# FSHD 예시 config로 3종 생성
+generate_research_docs(EXAMPLE_CONFIG, output_dir="./output")
+
+# 새 연구: config만 바꾸면 됨
+my_config = {
+    "study": {
+        "short_name": "CRPS",
+        "title_ko": "CRPS 환자의 경피 신경자극 효과",
+        "department": "부산대학교병원 재활의학과",
+        "pi": "이재현",
+        "preexam_title": "CRPS 예진 문진표",
+    },
+    "baseline": {
+        "sections": [
+            {"name": "통증 평가", "items": [
+                {"label": "VAS", "hint": "___ /100", "source": "patient"},
+                {"label": "DN4", "hint": "___ /10", "source": "patient"},
+            ]},
+        ],
+    },
+    "procedure": {
+        "sections": [
+            {"name": "시술 기록", "items": [
+                {"label": "자극 부위", "hint": "________", "source": "procedure"},
+                {"label": "자극 강도", "hint": "___ mA", "source": "procedure"},
+            ]},
+        ],
+    },
+    # ... inclusion, exclusion, followup 등
+}
+generate_research_docs(my_config, output_dir="./CRPS_docs")
+```
+
+**CLI에서 사용:**
+
+```bash
+# 예시 config 출력
+python3 clinical_research_scaffold.py --example > my_study.json
+
+# config 수정 후 문서 생성
+python3 clinical_research_scaffold.py my_study.json -o ./output
+
+# YAML도 지원 (pip install pyyaml)
+python3 clinical_research_scaffold.py my_study.yaml -o ./output
+```
+
+**워크플로우:**
+```
+1. --example로 config 템플릿 추출
+2. 연구에 맞게 config 수정 (항목, 기준, 시술 프로토콜 등)
+3. generate_research_docs() 실행 → 예진지 + Quick Sheet + CRF 생성
+4. 생성된 docx를 실제 양식에 맞게 최종 수정
+5. 연구 진행
+```
+
+**데이터 소스 색상:**
+- 🟡 `patient` — 환자 직접 작성
+- 🔵 `examiner`/`emr` — 검사자 측정 / EMR 후입력
+- 🟢 `calc` — 자동 계산
+- 🔴 `procedure` — 시술/검사 중 기록
+
+## 의존성 설치
+
+```bash
+pip install python-docx lxml pyyaml  # pyyaml은 YAML config 사용 시만 필요
+```
+
+## 원본 스크립트
+
+이 도구들은 다음 프로젝트별 스크립트에서 일반화되었습니다:
+
+- `temporaryfiles/create_cpet_protocol.py` → `pnuh_protocol_generator.py`
+- `temporaryfiles/create_icg_lymphography_protocol.py` → `pnuh_protocol_generator.py`
+- `temporaryfiles/create_icg_protocol.py` → `pnuh_protocol_generator.py`
+- `FSHD/build_commented_docx.py` → `docx_comment_injector.py`
+- `FSHD/{FSHD_CRF, 통증예진_어깨, Ultrasound Quick Sheet}.docx` → `clinical_research_scaffold.py`
