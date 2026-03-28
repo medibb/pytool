@@ -9,6 +9,7 @@
 | `pnuh_protocol_generator.py` | 프로토콜 제출서 docx 생성 (범용) | python-docx |
 | `docx_comment_injector.py` | 기존 docx에 Word 주석(Comment) 삽입 | lxml |
 | `clinical_research_scaffold.py` | 임상연구 문서 3종 자동 생성 (예진지+Quick Sheet+CRF) | python-docx, lxml |
+| `sap_generator.py` | 통계분석계획서(SAP) docx 자동 생성 — sample size 계산 + power curve + TransCelerate 구조 | python-docx, statsmodels, matplotlib, numpy, scipy |
 
 ## 사용법
 
@@ -151,10 +152,62 @@ python3 clinical_research_scaffold.py my_study.yaml -o ./output
 - 🟢 `calc` — 자동 계산
 - 🔴 `procedure` — 시술/검사 중 기록
 
+### 4. sap_generator.py
+
+연구 config dict → TransCelerate Common SAP Template 구조의 통계분석계획서(Statistical Analysis Plan)를 자동 생성합니다. Sample size 계산, sensitivity table, power curve가 내장되어 있습니다.
+
+**Python에서 사용:**
+
+```python
+from sap_generator import generate_sap, calculate_sample_size, EXAMPLE_CONFIG
+
+# Sample size만 계산
+result = calculate_sample_size(EXAMPLE_CONFIG["primary_outcome"])
+# → {'n_per_group': 39, 'n_per_group_adjusted': 49, 'total_n': 98, ...}
+
+# SAP 문서 전체 생성
+generate_sap(EXAMPLE_CONFIG, "My_Study_SAP.docx")
+```
+
+**CLI에서 사용:**
+
+```bash
+# FSHD 예시 config 출력
+python3 sap_generator.py --example
+
+# 예시 config로 SAP 즉시 생성
+python3 sap_generator.py --example --run
+
+# JSON config 파일로 생성
+python3 sap_generator.py my_study_config.json --output My_SAP.docx
+```
+
+**Config 핵심 필드:**
+- `study_title`, `design` (randomized_controlled_trial, cohort, etc.)
+- `arms` (군별 이름 + 목표 n)
+- `primary_outcome` (name, type, measure, mcid, sd, alpha, power, dropout_rate)
+- `analysis` (primary_method, missing_data, multiplicity, subgroup, sensitivity)
+- `randomization` (method, block_size, stratification)
+
+**지원 검정 유형:** independent_t, paired_t, anova, chi_square
+
+**SAP 출력 구조 (TransCelerate 9섹션):**
+1. Administrative Information
+2. Study Objectives & Hypotheses
+3. Study Design Summary
+4. Sample Size Justification (자동 계산 + sensitivity table + power curve)
+5. Randomization & Blinding
+6. Analysis Populations
+7. Statistical Methods (primary/secondary/subgroup/sensitivity/missing data)
+8. Tables & Figures Shells
+9. SAP Amendment Log
+
 ## 의존성 설치
 
 ```bash
-pip install python-docx lxml pyyaml  # pyyaml은 YAML config 사용 시만 필요
+pip install python-docx lxml pyyaml statsmodels matplotlib numpy scipy
+# pyyaml: YAML config 사용 시만 필요
+# statsmodels, matplotlib, numpy, scipy: sap_generator.py용
 ```
 
 ## 원본 스크립트
@@ -166,3 +219,4 @@ pip install python-docx lxml pyyaml  # pyyaml은 YAML config 사용 시만 필�
 - `temporaryfiles/create_icg_protocol.py` → `pnuh_protocol_generator.py`
 - `FSHD/build_commented_docx.py` → `docx_comment_injector.py`
 - `FSHD/{FSHD_CRF, 통증예진_어깨, Ultrasound Quick Sheet}.docx` → `clinical_research_scaffold.py`
+- TransCelerate Common SAP Template + statsmodels power analysis → `sap_generator.py`
